@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旗標訂餐系統</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #e8590c;
+      --primary-hover: #d9480f;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 16px 120px;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    /* 網址輸入區 */
+    .url-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    input[type="text"],
+    input[type="url"],
+    input[type="number"],
+    select {
+      font: inherit;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(232, 89, 12, .15);
+    }
+
+    .url-bar input { flex: 1; min-width: 0; }
+
+    button {
+      font: inherit;
+      font-weight: 600;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+
+    button:hover:not(:disabled) { background: var(--primary-hover); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Loading */
+    .loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 48px 0;
+      color: var(--muted);
+    }
+
+    .loading.show { display: flex; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .message {
+      text-align: center;
+      color: var(--muted);
+      padding: 24px 0;
+    }
+
+    .message.error { color: #c92a2a; }
+
+    /* 品項卡片 */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .card-name {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .card-price {
+      color: var(--primary);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .row .field { flex: 1; min-width: 0; }
+    .row .field.qty { flex: 0 0 90px; }
+
+    .field select,
+    .field input { width: 100%; }
+
+    .card-note {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+
+    /* 底部送出列 */
+    .order-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -2px 12px rgba(0, 0, 0, .05);
+    }
+
+    .order-bar-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .order-bar input { flex: 1; min-width: 0; max-width: 280px; }
+
+    .total {
+      margin-left: auto;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .total span { color: var(--primary); }
+
+    @media (max-width: 520px) {
+      .order-bar-inner { flex-wrap: wrap; }
+      .order-bar input { max-width: none; flex-basis: 100%; }
+      .total { margin-left: 0; }
+      .order-bar button { margin-left: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>旗標訂餐系統</h1>
+
+    <div class="url-bar">
+      <input type="url" id="menuUrl" placeholder="請貼上菜單網址，例如：https://example.com/menu">
+      <button id="analyzeBtn">分析菜單</button>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div>菜單分析中，請稍候…</div>
+    </div>
+
+    <div class="message" id="message">貼上菜單網址後，按「分析菜單」開始</div>
+
+    <div class="menu-grid" id="menuGrid"></div>
+  </div>
+
+  <div class="order-bar">
+    <div class="order-bar-inner">
+      <input type="text" id="customerName" placeholder="請輸入姓名">
+      <div class="total">合計：<span id="totalPrice">$0</span></div>
+      <button id="submitBtn">送出訂單</button>
+    </div>
+  </div>
+
+  <script>
+    // 後端 API 位置（之後接上後端時修改這裡）
+    const API_ANALYZE = '/api/analyze-menu';
+    const API_ORDER = '/api/order';
+    // 這些狀態碼代表網站上沒有後端（例如部署在 GitHub Pages）
+    const NO_BACKEND_STATUS = [404, 405, 501];
+
+    // 後端尚未完成時使用的示範資料
+    const DEMO_MENU = [
+      { name: '珍珠奶茶', price: 55, options: ['正常冰', '少冰', '去冰', '熱飲'] },
+      { name: '四季春青茶', price: 35, options: ['全糖', '半糖', '微糖', '無糖'] },
+      { name: '雞腿便當', price: 110, options: ['白飯', '五穀飯', '飯少'] },
+      { name: '排骨便當', price: 100, options: ['白飯', '五穀飯', '飯少'] },
+      { name: '牛肉麵', price: 150, options: ['原味', '小辣', '大辣'] },
+      { name: '燙青菜', price: 40, options: [] }
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const menuUrl = $('menuUrl');
+    const analyzeBtn = $('analyzeBtn');
+    const loading = $('loading');
+    const message = $('message');
+    const menuGrid = $('menuGrid');
+    const totalPrice = $('totalPrice');
+
+    let menuItems = [];
+
+    function showMessage(text, isError = false) {
+      message.textContent = text;
+      message.className = 'message' + (isError ? ' error' : '');
+      message.style.display = text ? 'block' : 'none';
+    }
+
+    function setLoading(on) {
+      loading.classList.toggle('show', on);
+      analyzeBtn.disabled = on;
+      analyzeBtn.textContent = on ? '分析中…' : '分析菜單';
+    }
+
+    async function analyzeMenu() {
+      const url = menuUrl.value.trim();
+      if (!url) {
+        showMessage('請先輸入菜單網址', true);
+        menuUrl.focus();
+        return;
+      }
+
+      menuGrid.innerHTML = '';
+      showMessage('');
+      setLoading(true);
+
+      try {
+        let items;
+        let res;
+        try {
+          res = await fetch(API_ANALYZE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+        } catch (err) {
+          // 連不到後端（例如直接開啟 HTML 檔）：模擬延遲後使用示範資料
+          await new Promise((r) => setTimeout(r, 1200));
+          res = null;
+          console.warn('無法連線後端，改用示範資料：', err);
+        }
+
+        // 靜態網站（例如 GitHub Pages）沒有後端 API：改用示範資料
+        if (res && NO_BACKEND_STATUS.includes(res.status)) {
+          await new Promise((r) => setTimeout(r, 1200));
+          res = null;
+        }
+
+        if (res) {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showMessage(data.error || ('分析失敗（HTTP ' + res.status + '）'), true);
+            return;
+          }
+          items = data.items;
+          if (data.source === 'rule') {
+            console.info('後端使用規則解析（未設定 ANTHROPIC_API_KEY），客製化選項可能不完整');
+          }
+        } else {
+          items = DEMO_MENU;
+        }
+
+        if (!Array.isArray(items) || items.length === 0) {
+          showMessage('沒有找到任何品項，請確認網址是否正確', true);
+          return;
+        }
+
+        menuItems = items;
+        renderMenu(items);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function renderMenu(items) {
+      menuGrid.innerHTML = items.map((item, i) => {
+        const options = item.options && item.options.length
+          ? item.options.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')
+          : '<option value="">無客製化選項</option>';
+
+        return `
+          <div class="card" data-index="${i}">
+            <div class="card-header">
+              <h3 class="card-name">${escapeHtml(item.name)}</h3>
+              <div class="card-price">$${Number(item.price) || 0}</div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="opt-${i}">客製化選項</label>
+                <select id="opt-${i}" class="item-option" ${item.options && item.options.length ? '' : 'disabled'}>
+                  ${options}
+                </select>
+              </div>
+              <div class="field qty">
+                <label for="qty-${i}">數量</label>
+                <input type="number" id="qty-${i}" class="item-qty" min="0" max="99" value="0">
+              </div>
+            </div>
+            <div class="field card-note">
+              <label for="note-${i}">備註</label>
+              <input type="text" id="note-${i}" class="item-note" placeholder="例如：不要香菜、少冰">
+            </div>
+          </div>
+        `;
+      }).join('');
+      updateTotal();
+    }
+
+    function collectOrder() {
+      return [...menuGrid.querySelectorAll('.card')].map((card) => {
+        const item = menuItems[card.dataset.index];
+        return {
+          name: item.name,
+          price: Number(item.price) || 0,
+          option: card.querySelector('.item-option').value,
+          quantity: parseInt(card.querySelector('.item-qty').value, 10) || 0,
+          note: card.querySelector('.item-note').value.trim()
+        };
+      }).filter((o) => o.quantity > 0);
+    }
+
+    function updateTotal() {
+      const total = collectOrder().reduce((sum, o) => sum + o.price * o.quantity, 0);
+      totalPrice.textContent = '$' + total;
+    }
+
+    menuGrid.addEventListener('input', (e) => {
+      if (e.target.classList.contains('item-qty')) updateTotal();
+    });
+
+    async function submitOrder() {
+      const name = $('customerName').value.trim();
+      const items = collectOrder();
+
+      if (!name) {
+        alert('請輸入姓名');
+        $('customerName').focus();
+        return;
+      }
+      if (items.length === 0) {
+        alert('請至少選擇一個品項（數量大於 0）');
+        return;
+      }
+
+      const order = {
+        name,
+        menuUrl: menuUrl.value.trim(),
+        items,
+        total: items.reduce((s, o) => s + o.price * o.quantity, 0)
+      };
+
+      const submitBtn = $('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '送出中…';
+
+      let res;
+      try {
+        res = await fetch(API_ORDER, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        });
+      } catch (err) {
+        res = null;
+      }
+      if (res && NO_BACKEND_STATUS.includes(res.status)) res = null;
+
+      try {
+        if (res) {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert('送出失敗：' + (data.error || 'HTTP ' + res.status));
+            return;
+          }
+          alert(`訂單已送出，謝謝 ${name}！\n訂單編號：${data.order.id}\n合計：$${data.order.total}`);
+          return;
+        }
+        // 後端還沒準備好：先顯示訂單內容
+        console.log('訂單內容：', order);
+        const lines = items.map((o) =>
+          `• ${o.name}${o.option ? '（' + o.option + '）' : ''} x ${o.quantity}${o.note ? '，備註：' + o.note : ''}`
+        );
+        alert(`（示範模式，尚未連線後端）\n\n訂購人：${name}\n${lines.join('\n')}\n\n合計：$${order.total}`);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '送出訂單';
+      }
+    }
+
+    analyzeBtn.addEventListener('click', analyzeMenu);
+    menuUrl.addEventListener('keydown', (e) => { if (e.key === 'Enter') analyzeMenu(); });
+    $('submitBtn').addEventListener('click', submitOrder);
+  </script>
+</body>
+</html>
